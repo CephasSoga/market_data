@@ -1,3 +1,7 @@
+#![allow(dead_code)]
+#![allow(warnings)]
+#![allow(unused_variables)]
+
 use std::env;
 
 /// Retrieves the Financial Modeling Prep API key from the environment variables.

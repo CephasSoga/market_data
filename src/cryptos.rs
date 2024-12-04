@@ -1,3 +1,8 @@
+#![allow(dead_code)]
+#![allow(warnings)]
+#![allow(unused_variables)]
+
+
 use crate::requests::{make_request, generate_json};
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -122,4 +127,28 @@ impl Cryptos {
 pub enum Either<L, R> {
     Single(L),
     Array(R),
+}
+
+
+
+async fn example() -> Result<(), reqwest::Error> {
+    // List all cryptocurrencies
+    let cryptos = Cryptos::list().await?;
+    
+    // Get quote for a single crypto
+    let btc_quote = Cryptos::quote(Some(Either::Single("BTC"))).await?;
+    
+    // Get quotes for multiple cryptos
+    let quotes = Cryptos::quote(Some(Either::Array(&["BTC", "ETH"]))).await?;
+    
+    // Get historical data
+    let history = Cryptos::history(
+        Either::Single("BTC"),
+        Some("2023-01-01"),
+        Some("2023-12-31"),
+        None,
+        Some(100)
+    ).await?;
+    
+    Ok(())
 }

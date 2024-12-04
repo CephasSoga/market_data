@@ -1,5 +1,4 @@
-mod auth;
-mod requests;
+#![allow(warnings)]
 
 fn main() {
     println!("Hello, world!");

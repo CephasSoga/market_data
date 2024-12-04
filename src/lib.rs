@@ -1,4 +1,12 @@
 pub mod commodities;
 pub mod requests;
 pub mod auth;
-pub mod cryptos; 
+pub mod cryptos;
+pub mod etfs;
+pub mod financials;
+pub mod forex;
+pub mod market;
+pub mod index;
+pub mod mutualfunds;
+pub mod search;
+pub mod stocks;
