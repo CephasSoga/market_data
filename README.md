@@ -1,4 +1,3 @@
-```sh
 # Market Data API Client
 
 ## Overview
@@ -28,25 +27,24 @@ The Market Data API Client is a Rust-based application that interacts with the F
    ```bash
    git clone https://github.com/yourusername/market_data.git
    cd market_data
-   ```
 
 2. Create a `.env` file in the root directory and add your FMP API key:
 
-   ```plaintext
-   FMP_API_KEY=your_api_key_here
-   ```
+```plaintext
+FMP_API_KEY=your_api_key_here
+```
 
 3. Build the project:
 
-   ```bash
-   cargo build
-   ```
+```bash
+cargo build
+```
 
 4. Run the application:
 
-   ```bash
-   cargo run
-   ```
+```bash
+cargo run
+```
 
 ## Usage
 
@@ -54,9 +52,23 @@ The application provides various modules to interact with different aspects of t
 
 ### Example: Fetching Most Active Stocks
 
-```
+```bash
+//@main.rs 
 
-```sh
+mod market;
+
+use crate::market::Market;
+
+pub async fn example() -> Result<(), reqwest::Error> {
+    // Get most active stocks
+    let active = Market::most_active().await?;
+    println!("ACTIVES: {:?}", active);
+
+#[tokio::main]
+async fn main() {
+    example().await;
+}
+```
 
 ## Modules
 
@@ -83,4 +95,4 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 - [Financial Modeling Prep](https://financialmodelingprep.com/) for providing the API.
 - [Tokio](https://tokio.rs/) for asynchronous programming in Rust.
-```
+- [FMP Node Wrapper project](https://github.com/patelneel55/financialmodelingprep) which we converted into full Rust.
