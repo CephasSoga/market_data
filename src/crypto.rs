@@ -131,7 +131,7 @@ pub enum Either<L, R> {
 
 
 
-async fn example() -> Result<(), reqwest::Error> {
+pub async fn example() -> Result<(), reqwest::Error> {
     // List all cryptocurrencies
     let cryptos = Cryptos::list().await?;
     

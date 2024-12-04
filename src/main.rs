@@ -18,5 +18,5 @@ use crate::market::Market;
 
 #[tokio::main]
 async fn main() {
-    market::example().await;
+    index::example().await;
 }

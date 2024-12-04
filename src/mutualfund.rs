@@ -136,7 +136,7 @@ impl MutualFund {
 }
 
 
-async fn example() -> Result<(), reqwest::Error> {
+pub async fn example() -> Result<(), reqwest::Error> {
     // List all mutual funds
     let funds = MutualFund::list().await?;
     

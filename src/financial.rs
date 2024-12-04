@@ -154,7 +154,7 @@ impl<'a> Financial<'a> {
 }
 
 
-async fn example() -> Result<(), reqwest::Error> {
+pub async fn example() -> Result<(), reqwest::Error> {
     let aapl = Financial::new("AAPL");
     
     // Get annual income statement

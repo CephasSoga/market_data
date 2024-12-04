@@ -176,7 +176,7 @@ impl<'a> Stock<'a> {
 }
 
 
-async fn example() -> Result<(), reqwest::Error> {
+pub async fn example() -> Result<(), reqwest::Error> {
     let aapl = Stock::new("AAPL");
     
     // Get company profile

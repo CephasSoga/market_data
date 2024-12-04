@@ -70,7 +70,7 @@ impl Index {
 }
 
 
-async fn example() -> Result<(), reqwest::Error> {
+pub async fn example() -> Result<(), reqwest::Error> {
     // List all indices
     let indices = Index::list().await?;
     

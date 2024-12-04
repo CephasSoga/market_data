@@ -73,7 +73,7 @@ impl<'a> Forex<'a> {
 }
 
 
-async fn example() -> Result<(), reqwest::Error> {
+pub async fn example() -> Result<(), reqwest::Error> {
     let eur_usd = Forex::new("EUR", "USD");
     
     // Get current exchange rate

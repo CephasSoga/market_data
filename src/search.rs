@@ -49,7 +49,7 @@ impl Search {
 }
 
 
-async fn example() -> Result<(), reqwest::Error> {
+pub async fn example() -> Result<(), reqwest::Error> {
     // Search for "apple" with max 10 results from NASDAQ
     let results = Search::query("apple", Some(10), Some("NASDAQ")).await?;
     

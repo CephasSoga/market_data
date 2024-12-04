@@ -136,7 +136,7 @@ impl Etf {
 }
 
 
-async fn example() -> Result<(), reqwest::Error> {
+pub async fn example() -> Result<(), reqwest::Error> {
     // List all ETFs
     let etfs = Etf::list().await?;
     
