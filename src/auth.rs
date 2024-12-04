@@ -3,6 +3,7 @@
 #![allow(unused_variables)]
 
 use std::env;
+use dotenv::dotenv;
 
 /// Retrieves the Financial Modeling Prep API key from the environment variables.
 ///
@@ -10,6 +11,7 @@ use std::env;
 ///
 /// A String containing the API key.
 pub fn fmp_api_key() -> String {
+    dotenv().ok(); // Load the .env file
     match env::var("FMP_API_KEY") {
         Ok(key) => key,
         Err(_) => {

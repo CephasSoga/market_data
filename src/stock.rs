@@ -2,8 +2,8 @@
 #![allow(warnings)]
 #![allow(unused_variables)]
 
-use crate::requests::{make_request, generate_json};
-use crate::financials::Financials;
+use crate::request::{make_request, generate_json};
+use crate::financial::Financial;
 use serde_json::{json, Value};
 
 /// Functions for accessing stock-related data from the FMP API.
@@ -50,8 +50,8 @@ impl<'a> Stock<'a> {
     /// ## Returns
     ///
     /// A Financials instance for accessing financial data.
-    pub fn financial(&self) -> Financials {
-        Financials::new(self.symbol)
+    pub fn financial(&self) -> Financial {
+        Financial::new(self.symbol)
     }
 
     /// Gets company rating information.

@@ -2,14 +2,14 @@
 #![allow(warnings)]
 #![allow(unused_variables)]
 
-use crate::requests::{make_request, generate_json};
+use crate::request::{make_request, generate_json};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
 /// Functions for accessing mutual fund data from the FMP API.
-pub struct MutualFunds;
+pub struct MutualFund;
 
-impl MutualFunds {
+impl MutualFund {
     /// Lists all available mutual funds.
     ///
     /// ## Returns
@@ -138,13 +138,13 @@ impl MutualFunds {
 
 async fn example() -> Result<(), reqwest::Error> {
     // List all mutual funds
-    let funds = MutualFunds::list().await?;
+    let funds = MutualFund::list().await?;
     
     // Get quote for a specific fund
-    let vanguard_quote = MutualFunds::quote(Some("VFINX")).await?;
+    let vanguard_quote = MutualFund::quote(Some("VFINX")).await?;
     
     // Get historical data
-    let history = MutualFunds::history(
+    let history = MutualFund::history(
         "VFINX",
         Some("2023-01-01"),
         Some("2023-12-31"),

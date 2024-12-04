@@ -2,15 +2,15 @@
 #![allow(warnings)]
 #![allow(unused_variables)]
 
-use crate::requests::{make_request, generate_json};
+use crate::request::{make_request, generate_json};
 use serde_json::{json, Value};
 
 /// Functions for accessing financial statement data from the FMP API
-pub struct Financials<'a> {
+pub struct Financial<'a> {
     symbol: &'a str,
 }
 
-impl<'a> Financials<'a> {
+impl<'a> Financial<'a> {
     /// Creates a new Financials instance for a specific stock symbol.
     ///
     /// ## Arguments
@@ -155,7 +155,7 @@ impl<'a> Financials<'a> {
 
 
 async fn example() -> Result<(), reqwest::Error> {
-    let aapl = Financials::new("AAPL");
+    let aapl = Financial::new("AAPL");
     
     // Get annual income statement
     let income = aapl.income(None).await?;

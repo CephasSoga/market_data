@@ -2,7 +2,8 @@
 #![allow(warnings)]
 #![allow(unused_variables)]
 
-use crate::requests::make_request;
+
+use crate::request::{generate_json, make_request};
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -57,9 +58,10 @@ impl Market {
 }
 
 
-async fn example() -> Result<(), reqwest::Error> {
+pub async fn example() -> Result<(), reqwest::Error> {
     // Get most active stocks
     let active = Market::most_active().await?;
+    println!("ACTIVES: {:?}", active);
     
     // Get top gainers
     let gainers = Market::most_gainer().await?;

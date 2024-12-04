@@ -2,14 +2,14 @@
 #![allow(warnings)]
 #![allow(unused_variables)]
 
-use crate::requests::{make_request, generate_json};
+use crate::request::{make_request, generate_json};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
 /// Functions for accessing ETF-related data from the FMP API
-pub struct Etfs;
+pub struct Etf;
 
-impl Etfs {
+impl Etf {
     /// Lists all available ETFs.
     /// 
     /// ## Returns
@@ -138,13 +138,13 @@ impl Etfs {
 
 async fn example() -> Result<(), reqwest::Error> {
     // List all ETFs
-    let etfs = Etfs::list().await?;
+    let etfs = Etf::list().await?;
     
     // Get quote for a specific ETF
-    let spy_quote = Etfs::quote(Some("SPY")).await?;
+    let spy_quote = Etf::quote(Some("SPY")).await?;
     
     // Get historical data
-    let history = Etfs::history(
+    let history = Etf::history(
         "SPY",
         Some("2023-01-01"),
         Some("2023-12-31"),
