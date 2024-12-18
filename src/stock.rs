@@ -2,6 +2,8 @@
 #![allow(warnings)]
 #![allow(unused_variables)]
 
+use std::collections::HashMap;
+
 use crate::request::{make_request, generate_json};
 use crate::financial::Financial;
 use serde_json::{json, Value};
@@ -21,6 +23,9 @@ impl<'a> Stock<'a> {
         Self { symbol }
     }
 
+    pub async fn list() -> Result<Value, reqwest::Error> {
+        make_request("stock/list", HashMap::new()).await
+    }
     /// Gets company profile information.
     ///
     /// ## Returns

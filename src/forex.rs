@@ -2,6 +2,8 @@
 #![allow(warnings)]
 #![allow(unused_variables)]
 
+use std::collections::HashMap;
+
 use crate::request::{make_request, generate_json};
 use serde_json::{json, Value};
 
@@ -23,6 +25,10 @@ impl<'a> Forex<'a> {
             from_curr,
             to_curr,
         }
+    }
+
+    pub async fn list() -> Result<Value, reqwest::Error> {
+        make_request("symbol/available-forex-currency-pairs", HashMap::new()).await
     }
 
     /// Gets the current exchange rate for the currency pair.
