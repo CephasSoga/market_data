@@ -1,0 +1,13 @@
+[header]
+msg = "Successfully loaded configurations."
+
+[api]
+token = ""
+
+[websoket]
+stock_ws = "wss://websockets.financialmodelingprep.com"
+crypto_ws = "wss://crypto.financialmodelingprep.com"
+forex_ws = "wss://forex.financialmodelingprep.com"
+channel_bound = 100
+shutdown_delay_ms = 60
+batch_interval_ms = 500

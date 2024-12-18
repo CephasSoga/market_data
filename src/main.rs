@@ -12,7 +12,8 @@ pub mod index;
 pub mod mutualfund;
 pub mod search;
 pub mod stock;
-
+pub mod config;
+pub mod websocket;
 
 use crate::market::Market;
 
