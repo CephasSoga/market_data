@@ -6,17 +6,17 @@ use config::{builder::DefaultState, ConfigBuilder, ConfigError, File};
 use serde_json::Number;
 
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Hash, Deserialize)]
 pub struct ConfigHeader {
     msg: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Hash, Deserialize)]
 pub struct ApiConfig {
     pub token: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Hash, Deserialize)]
 pub struct WebsocketConfig {
     pub stock_ws: String,
     pub forex_ws: String,
@@ -31,7 +31,7 @@ pub struct LoggingConfig {
     pub level: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Hash, Deserialize)]
 pub struct Config {
     pub header: ConfigHeader,
     pub api: ApiConfig,

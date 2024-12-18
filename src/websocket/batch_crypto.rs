@@ -3,6 +3,7 @@ use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use tokio::{sync::mpsc, sync::watch, time};
 use futures_util::{SinkExt, StreamExt};
 use serde::{Serialize, Deserialize};
+use std::sync::Arc;
 use std::error::Error;
 use tracing::{info, error};
 use crate::config::Config;
@@ -21,7 +22,7 @@ struct CryptoUpdate {
 }
 
 struct CryptoSocket {
-    config: Config,
+    config: Arc<Config>,
 }
 
 impl CryptoSocket {
@@ -32,7 +33,16 @@ impl CryptoSocket {
         Ok(())
     }
 
-    async fn consume(&self, tickers: &Vec<String>, shutdown_rx: watch::Receiver<bool>) -> Result<(), Box<dyn Error>> {
+    async fn process_batch(buffer: &mut Vec<CryptoUpdate>) {
+        let batch = buffer.drain(..).collect::<Vec<_>>();
+        for update in batch {
+            if let Err(err) = CryptoSocket::handle_update(update).await {
+                error!("Failed to handle update: {:?}", err);
+            }
+        }
+    }
+
+    async fn stream(&self, tickers: &Vec<String>, shutdown_rx: watch::Receiver<bool>) -> Result<(), Box<dyn Error>> {
         let url = &self.config.websocket.crypto_ws;
         let (ws_stream, _) = connect_async(url).await?;
         let (mut write, mut read) = ws_stream.split();
@@ -53,12 +63,12 @@ impl CryptoSocket {
                     Some(update) = rx.recv() => {
                         buffer.push(update);
                         if buffer.len() >= 10 {
-                            process_batch(&mut buffer).await;
+                            Self::process_batch(&mut buffer).await;
                         }
                     },
                     _ = interval.tick() => {
                         if !buffer.is_empty() {
-                            process_batch(&mut buffer).await;
+                            Self::process_batch(&mut buffer).await;
                         }
                     }
                 }
@@ -112,44 +122,51 @@ impl CryptoSocket {
         write.close().await?;
         Ok(())
     }
-}
 
-async fn process_batch(buffer: &mut Vec<CryptoUpdate>) {
-    let batch = buffer.drain(..).collect::<Vec<_>>();
-    for update in batch {
-        if let Err(err) = CryptoSocket::handle_update(update).await {
-            error!("Failed to handle update: {:?}", err);
+    async fn consume(&self, tickers: Vec<String>) -> Result<(), Box<dyn Error>> {
+        // Initialize logging
+        tracing_subscriber::fmt::init();
+    
+        let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
+
+        // Clone the `Arc` for use in the spawned task
+        let config = Arc::clone(&self.config);
+    
+        // Spawn a task to trigger shutdown after a delay
+        tokio::spawn(async move {
+            tokio::time::sleep(tokio::time::Duration::from_secs(config.websocket.shutdown_delay_ms)).await;
+            let _ = shutdown_tx.send(true);
+        });
+
+    
+        tokio::select! {
+            result = self.stream(&tickers, shutdown_rx.clone()) => {
+                if let Err(err) = result {
+                    error!("Error in WebSocket consumption: {}", err);
+                }
+            }
+            _ = shutdown_rx.changed() => {
+                info!("Shutdown signal received. Exiting.");
+            }
         }
+    
+        Ok(())
     }
 }
 
+
+
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+/// Tickers: ["ETHUSD", "BTCUSD", "DOGUSD"];
+async fn example(tickers: Vec<String>) -> Result<(), Box<dyn Error>> {
     // Initialize logging
     tracing_subscriber::fmt::init();
 
-    let config = Config::new()?;
-    let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
+    let config = Arc::new(Config::new()?);
+    
+    let stock_websocket = CryptoSocket {config};
 
-    // Spawn a task to trigger shutdown after a delay
-    tokio::spawn(async move {
-        tokio::time::sleep(tokio::time::Duration::from_secs(config.websocket.shutdown_delay_ms)).await;
-        let _ = shutdown_tx.send(true);
-    });
-
-    let tickers = vec!["ETHUSD".to_string(), "BTCUSD".to_string(), "DOGUSD".to_string()];
-    let stock_socket = CryptoSocket { config };
-
-    tokio::select! {
-        result = stock_socket.consume(&tickers, shutdown_rx.clone()) => {
-            if let Err(err) = result {
-                error!("Error in WebSocket consumption: {}", err);
-            }
-        }
-        _ = shutdown_rx.changed() => {
-            info!("Shutdown signal received. Exiting.");
-        }
-    }
+    stock_websocket.consume(tickers).await?;
 
     Ok(())
 }
