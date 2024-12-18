@@ -11,3 +11,4 @@ forex_ws = "wss://forex.financialmodelingprep.com"
 channel_bound = 100
 shutdown_delay_ms = 60
 batch_interval_ms = 500
+buffer_size = 1000

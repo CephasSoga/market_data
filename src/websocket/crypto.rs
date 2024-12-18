@@ -4,6 +4,8 @@ use tokio::sync::mpsc;
 use futures_util::{SinkExt, StreamExt};
 use serde::{Serialize, Deserialize};
 use std::error::Error;
+use tokio::sync::watch;
+use std::sync::Arc;
 
 use crate::config::Config;
 
@@ -21,7 +23,7 @@ struct CryptoUpdate {
 }
 
 struct CryptoSocket {
-    config: Config,
+    config: Arc<Config>,
 }
 impl CryptoSocket {
     async fn handle_update(update: CryptoUpdate) {
@@ -30,7 +32,7 @@ impl CryptoSocket {
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
     }
 
-    async fn consume(&self, tickers: &Vec<String>) -> Result<(), Box<dyn Error>> {
+    async fn stream(&self, tickers: &Vec<String>) -> Result<(), Box<dyn Error>> {
         let url = &self.config.websocket.crypto_ws; //######
         let (ws_stream, _) = connect_async(url).await?;
         let (mut write, mut read) = ws_stream.split();
@@ -84,6 +86,33 @@ impl CryptoSocket {
                     }
                 }
                 _ => (),
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn consume(&self, tickers: Vec<String>) -> Result<(), Box<dyn Error>> {
+
+        let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
+        let config = Arc::clone(&self.config);
+    
+        tokio::spawn(async move {
+            // Example: Trigger shutdown after <SOME> seconds
+            tokio::time::sleep(tokio::time::Duration::from_secs(
+                config.websocket.shutdown_delay_ms
+            )).await;
+            let _ = shutdown_tx.send(true);
+        });
+    
+        tokio::select! {
+            result = self.stream(&tickers) => {
+                if let Err(err) = result {
+                    eprintln!("Error in WebSocket consumption: {}", err);
+                }
+            }
+            _ = shutdown_rx.changed() => {
+                println!("Shutdown signal received. Exiting.");
             }
         }
 

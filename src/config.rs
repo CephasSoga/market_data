@@ -24,6 +24,7 @@ pub struct WebsocketConfig {
     pub channel_bound: usize,
     pub shutdown_delay_ms: u64,
     pub batch_interval_ms: u64,
+    pub buffer_size: usize,
 }
 
 #[derive(Clone, Hash, Debug, Deserialize)]

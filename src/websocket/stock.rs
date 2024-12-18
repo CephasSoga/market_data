@@ -5,7 +5,8 @@ use futures_util::{SinkExt, StreamExt};
 use serde::{Serialize, Deserialize};
 use std::error::Error;
 use crate::config::Config;
-
+use tokio::sync::watch;
+use std::sync::Arc;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct StockUpdate {
@@ -22,7 +23,7 @@ struct StockUpdate {
 
 
 struct StockSocket {
-    config: Config,
+    config: Arc<Config>,
 }
 impl StockSocket {
     async fn handle_update(update: StockUpdate) {
@@ -31,7 +32,7 @@ impl StockSocket {
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
     }
 
-    async fn consume(&self, tickers: &Vec<String>) -> Result<(), Box<dyn Error>> {
+    async fn stream(&self, tickers: &Vec<String>) -> Result<(), Box<dyn Error>> {
         let url = &self.config.websocket.stock_ws;
         let (ws_stream, _) = connect_async(url).await?;
         let (mut write, mut read) = ws_stream.split();
@@ -90,39 +91,38 @@ impl StockSocket {
 
         Ok(())
     }
+
+    async fn consume(&self, tickers: Vec<String>) -> Result<(), Box<dyn Error>> {
+
+        let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
+        let config = Arc::clone(&self.config);
+    
+        tokio::spawn(async move {
+            // Example: Trigger shutdown after <SOME> seconds
+            tokio::time::sleep(tokio::time::Duration::from_secs(
+                config.websocket.shutdown_delay_ms
+            )).await;
+            let _ = shutdown_tx.send(true);
+        });
+    
+        tokio::select! {
+            result = self.stream(&tickers) => {
+                if let Err(err) = result {
+                    eprintln!("Error in WebSocket consumption: {}", err);
+                }
+            }
+            _ = shutdown_rx.changed() => {
+                println!("Shutdown signal received. Exiting.");
+            }
+        }
+
+        Ok(())
+    }
 }
 
 
 
-use tokio::sync::watch;
-
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
-    let config = Config::new()?;
-
-    let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
-
-    tokio::spawn(async move {
-        // Example: Trigger shutdown after <SOME> seconds
-        tokio::time::sleep(tokio::time::Duration::from_secs(
-            config.websocket.shutdown_delay_ms
-        )).await;
-        let _ = shutdown_tx.send(true);
-    });
-
-    let tickers = vec!["AAPL".to_string(), "GOOGL".to_string(), "MSFT".to_string()];
-    let stock_socket = StockSocket { config };
-
-    tokio::select! {
-        result = stock_socket.consume(&tickers) => {
-            if let Err(err) = result {
-                eprintln!("Error in WebSocket consumption: {}", err);
-            }
-        }
-        _ = shutdown_rx.changed() => {
-            println!("Shutdown signal received. Exiting.");
-        }
-    }
-
+async fn example() -> Result<(), Box<dyn Error>> {
     Ok(())
 }

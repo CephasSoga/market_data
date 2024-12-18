@@ -1,11 +1,13 @@
 use tokio::net::TcpStream;
-use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
+use tokio_tungstenite::{connect_async, tungstenite::protocol::Message, WebSocketStream};
+use tokio_tungstenite::tungstenite::protocol::{CloseFrame, frame::coding::CloseCode};
 use tokio::{sync::mpsc, sync::watch, time};
 use futures_util::{SinkExt, StreamExt};
 use serde::{Serialize, Deserialize};
 use std::sync::Arc;
 use std::error::Error;
 use tracing::{info, error};
+use futures::stream::{SplitSink, SplitStream};
 use crate::config::Config;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -23,9 +25,21 @@ struct CryptoUpdate {
 
 struct CryptoSocket {
     config: Arc<Config>,
+    write: Option<SplitSink<WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>, Message>>,
+    read: Option<SplitStream<WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>>>,
 }
 
+
 impl CryptoSocket {
+
+    pub async fn new(config: Config) -> Self {
+        CryptoSocket {
+                config: Arc::new(config),
+                write: None,
+                read: None,
+        }
+    }
+
     async fn handle_update(update: CryptoUpdate) -> Result<(), Box<dyn Error>> {
         info!("Update for {}: {:?}", update.s, update);
         // Simulate some processing time (e.g., database insert or analysis)
@@ -42,27 +56,56 @@ impl CryptoSocket {
         }
     }
 
-    async fn stream(&self, tickers: &Vec<String>, shutdown_rx: watch::Receiver<bool>) -> Result<(), Box<dyn Error>> {
+    /// Close the WebSocket connection
+    pub async fn close(&mut self, reason: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
+        let reason = reason.unwrap_or_else(|| "No specific reason provided".to_string());
+
+        let close_frame = CloseFrame {
+            code: CloseCode::Normal, // Specify the close code
+            reason: reason.clone().into(), // Optional reason
+        };
+
+        // Close the write side of the WebSocket
+        if let Some(mut write) = self.write.take() {
+            write.close().await?;
+            info!("WebSocket connection closed. Reason: {}", reason);
+        } else {
+            info!("WebSocket write connection was already closed.");
+        }
+
+        // Drop the read half (optional cleanup)
+        if self.read.take().is_some() {
+            info!("WebSocket read connection dropped.");
+        }
+
+        Ok(())
+    }
+
+
+    async fn stream(&mut self, tickers: &Vec<String>, shutdown_rx: watch::Receiver<bool>) -> Result<(), Box<dyn Error>> {
         let url = &self.config.websocket.crypto_ws;
         let (ws_stream, _) = connect_async(url).await?;
         let (mut write, mut read) = ws_stream.split();
-
-        // Channel for updates
+    
+        self.write = Some(write);
+    
         let (tx, mut rx) = mpsc::channel::<CryptoUpdate>(self.config.websocket.channel_bound);
-
-        // Read interval setting
         let interval_ms = self.config.websocket.batch_interval_ms;
+    
+        // Clone the `Arc` for use in the spawned task
+        let config = Arc::clone(&self.config);
 
-        // Spawn a task to process updates
+        // Spawn task for batch processing
+        let mut shutdown_rx_clone = shutdown_rx.clone();
         tokio::spawn(async move {
             let mut buffer = Vec::new();
-            let mut interval = time::interval(time::Duration::from_millis(interval_ms)); // E.g: Flush every 500ms
-
+            let mut interval = time::interval(time::Duration::from_millis(interval_ms));
+    
             loop {
                 tokio::select! {
                     Some(update) = rx.recv() => {
                         buffer.push(update);
-                        if buffer.len() >= 10 {
+                        if buffer.len() >= config.websocket.buffer_size {
                             Self::process_batch(&mut buffer).await;
                         }
                     },
@@ -70,30 +113,29 @@ impl CryptoSocket {
                         if !buffer.is_empty() {
                             Self::process_batch(&mut buffer).await;
                         }
+                    },
+                    _ = shutdown_rx_clone.changed() => {
+                        info!("Shutdown signal received in batch processor.");
+                        break;
                     }
                 }
             }
         });
-
-        // Send login message
+    
+        // Send login and subscription messages
         let login_message = serde_json::json!({
             "event": "login",
-            "data": {
-                "apiKey": self.config.api.token,
-            }
+            "data": { "apiKey": self.config.api.token }
         });
-        write.send(Message::Text(login_message.to_string())).await?;
-
-        // Subscribe to tickers
+        self.write.as_mut().unwrap().send(Message::Text(login_message.to_string())).await?;
+    
         let subscribe_message = serde_json::json!({
             "event": "subscribe",
-            "data": {
-                "ticker": tickers,
-            }
+            "data": { "ticker": tickers }
         });
-        write.send(Message::Text(subscribe_message.to_string())).await?;
-
-        // Read WebSocket messages and send to channel
+        self.write.as_mut().unwrap().send(Message::Text(subscribe_message.to_string())).await?;
+    
+        // Read WebSocket messages
         while !*shutdown_rx.borrow() {
             if let Some(message) = read.next().await {
                 match message {
@@ -117,27 +159,27 @@ impl CryptoSocket {
                 }
             }
         }
-
-        // Close WebSocket connection
-        write.close().await?;
+    
+        // Clean up
+        self.close(Some("Stream ending.".to_string())).await?;
         Ok(())
     }
+    
 
-    async fn consume(&self, tickers: Vec<String>) -> Result<(), Box<dyn Error>> {
-        // Initialize logging
-        tracing_subscriber::fmt::init();
+    async fn consume(&mut self, tickers: Vec<String>, auto_shutdown: bool) -> Result<(), Box<dyn Error>> {
     
         let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
 
         // Clone the `Arc` for use in the spawned task
         let config = Arc::clone(&self.config);
     
-        // Spawn a task to trigger shutdown after a delay
-        tokio::spawn(async move {
-            tokio::time::sleep(tokio::time::Duration::from_secs(config.websocket.shutdown_delay_ms)).await;
-            let _ = shutdown_tx.send(true);
-        });
-
+        if auto_shutdown {
+            // Spawn a task to trigger shutdown after configured delay
+            tokio::spawn(async move {
+                tokio::time::sleep(tokio::time::Duration::from_secs(config.websocket.shutdown_delay_ms)).await;
+                let _ = shutdown_tx.send(true);
+            });
+        }
     
         tokio::select! {
             result = self.stream(&tickers, shutdown_rx.clone()) => {
@@ -162,11 +204,11 @@ async fn example(tickers: Vec<String>) -> Result<(), Box<dyn Error>> {
     // Initialize logging
     tracing_subscriber::fmt::init();
 
-    let config = Arc::new(Config::new()?);
+    let config = Config::new()?;
     
-    let stock_websocket = CryptoSocket {config};
-
-    stock_websocket.consume(tickers).await?;
+    let mut websocket = CryptoSocket::new(config).await;
+    
+    websocket.consume(tickers, true).await?;
 
     Ok(())
 }
