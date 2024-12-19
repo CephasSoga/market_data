@@ -2,44 +2,91 @@
 #![allow(warnings)]
 #![allow(unused_variables)]
 
-use crate::request::{make_request, generate_json};
-use serde_json::{json, Value};
 use std::collections::HashMap;
 
-/// Functions for accessing mutual fund data from the FMP API.
-pub struct MutualFund;
+use crate::api_calls::request::{make_request, generate_json};
+use crate::api_calls::financial::Financial;
+use serde_json::{json, Value};
 
-impl MutualFund {
-    /// Lists all available mutual funds.
+/// Functions for accessing stock-related data from the FMP API.
+pub struct Stock<'a> {
+    symbol: &'a str,
+}
+
+impl<'a> Stock<'a> {
+    /// Creates a new Stock instance for a specific stock symbol.
     ///
-    /// ## Returns
+    /// ## Arguments
     ///
-    /// A Result containing either the JSON response or an error.
+    /// * `symbol` - The stock symbol to get data for
+    pub fn new(symbol: &'a str) -> Self {
+        Self { symbol }
+    }
+
     pub async fn list() -> Result<Value, reqwest::Error> {
-        make_request("symbol/available-mutual-funds", HashMap::new()).await
+        make_request("stock/list", HashMap::new()).await
     }
-
-    /// Gets quotes for either a specific mutual fund or all mutual funds.
-    ///
-    /// ## Arguments
-    ///
-    /// * `symbol` - Optional mutual fund symbol to get quote for. If None, returns quotes for all mutual funds.
+    /// Gets company profile information.
     ///
     /// ## Returns
     ///
     /// A Result containing either the JSON response or an error.
-    pub async fn quote(symbol: Option<&str>) -> Result<Value, reqwest::Error> {
-        match symbol {
-            Some(s) => make_request("quote", generate_json(Value::String(s.to_string()), None)).await,
-            None => make_request("quotes/mutual_fund", HashMap::new()).await,
-        }
+    pub async fn profile(&self) -> Result<Value, reqwest::Error> {
+        make_request(
+            "company/profile",
+            generate_json(Value::String(self.symbol.to_string()), None)
+        ).await
     }
 
-    /// Gets historical price data for a mutual fund.
+    /// Gets current stock quote.
+    ///
+    /// ## Returns
+    ///
+    /// A Result containing either the JSON response or an error.
+    pub async fn quote(&self) -> Result<Value, reqwest::Error> {
+        make_request(
+            "quote",
+            generate_json(Value::String(self.symbol.to_string()), None)
+        ).await
+    }
+
+    /// Gets financial statements and metrics.
+    ///
+    /// ## Returns
+    ///
+    /// A Financials instance for accessing financial data.
+    pub fn financial(&self) -> Financial {
+        Financial::new(self.symbol)
+    }
+
+    /// Gets company rating information.
+    ///
+    /// ## Returns
+    ///
+    /// A Result containing either the JSON response or an error.
+    pub async fn rating(&self) -> Result<Value, reqwest::Error> {
+        make_request(
+            "company/rating",
+            generate_json(Value::String(self.symbol.to_string()), None)
+        ).await
+    }
+
+    /// Gets real-time stock price.
+    ///
+    /// ## Returns
+    ///
+    /// A Result containing either the JSON response or an error.
+    pub async fn current_price(&self) -> Result<Value, reqwest::Error> {
+        make_request(
+            "stock/real-time-price",
+            generate_json(Value::String(self.symbol.to_string()), None)
+        ).await
+    }
+
+    /// Gets historical price data.
     ///
     /// ## Arguments
     ///
-    /// * `symbol` - Mutual fund symbol to get history for
     /// * `start_date` - Optional start date
     /// * `end_date` - Optional end date
     /// * `data_type` - Optional data type
@@ -49,7 +96,7 @@ impl MutualFund {
     ///
     /// A Result containing either the JSON response or an error.
     pub async fn history(
-        symbol: &str,
+        &self,
         start_date: Option<&str>,
         end_date: Option<&str>,
         data_type: Option<&str>,
@@ -63,16 +110,15 @@ impl MutualFund {
         });
 
         make_request(
-            "historical-price-full/mutual_fund",
-            generate_json(Value::String(symbol.to_string()), Some(query_params))
+            "historical-price-full",
+            generate_json(Value::String(self.symbol.to_string()), Some(query_params))
         ).await
     }
 
-    /// Gets dividend history for a mutual fund.
+    /// Gets dividend history.
     ///
     /// ## Arguments
     ///
-    /// * `symbol` - Mutual fund symbol to get dividend history for
     /// * `start_date` - Optional start date
     /// * `end_date` - Optional end date
     /// * `data_type` - Optional data type
@@ -82,7 +128,7 @@ impl MutualFund {
     ///
     /// A Result containing either the JSON response or an error.
     pub async fn dividend_history(
-        symbol: &str,
+        &self,
         start_date: Option<&str>,
         end_date: Option<&str>,
         data_type: Option<&str>,
@@ -97,15 +143,14 @@ impl MutualFund {
 
         make_request(
             "historical-price-full/stock_dividend",
-            generate_json(Value::String(symbol.to_string()), Some(query_params))
+            generate_json(Value::String(self.symbol.to_string()), Some(query_params))
         ).await
     }
 
-    /// Gets split history for a mutual fund.
+    /// Gets stock split history.
     ///
     /// ## Arguments
     ///
-    /// * `symbol` - Mutual fund symbol to get split history for
     /// * `start_date` - Optional start date
     /// * `end_date` - Optional end date
     /// * `data_type` - Optional data type
@@ -115,7 +160,7 @@ impl MutualFund {
     ///
     /// A Result containing either the JSON response or an error.
     pub async fn split_history(
-        symbol: &str,
+        &self,
         start_date: Option<&str>,
         end_date: Option<&str>,
         data_type: Option<&str>,
@@ -130,22 +175,27 @@ impl MutualFund {
 
         make_request(
             "historical-price-full/stock_split",
-            generate_json(Value::String(symbol.to_string()), Some(query_params))
+            generate_json(Value::String(self.symbol.to_string()), Some(query_params))
         ).await
     }
 }
 
 
 pub async fn example() -> Result<(), reqwest::Error> {
-    // List all mutual funds
-    let funds = MutualFund::list().await?;
+    let aapl = Stock::new("AAPL");
     
-    // Get quote for a specific fund
-    let vanguard_quote = MutualFund::quote(Some("VFINX")).await?;
+    // Get company profile
+    let profile = aapl.profile().await?;
+    
+    // Get current quote
+    let quote = aapl.quote().await?;
+    
+    // Get financial data
+    let financials = aapl.financial();
+    let income = financials.income(None).await?;
     
     // Get historical data
-    let history = MutualFund::history(
-        "VFINX",
+    let history = aapl.history(
         Some("2023-01-01"),
         Some("2023-12-31"),
         None,

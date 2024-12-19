@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 
-use crate::request::{make_request, generate_json};
+use crate::api_calls::request::{make_request, generate_json};
 use serde_json::{json, Value};
 
 /// Functions for accessing foreign exchange rate data from the FMP API.

@@ -2,91 +2,44 @@
 #![allow(warnings)]
 #![allow(unused_variables)]
 
+use crate::api_calls::request::{make_request, generate_json};
+use serde_json::{json, Value};
 use std::collections::HashMap;
 
-use crate::request::{make_request, generate_json};
-use crate::financial::Financial;
-use serde_json::{json, Value};
+/// Functions for accessing ETF-related data from the FMP API
+pub struct Etf;
 
-/// Functions for accessing stock-related data from the FMP API.
-pub struct Stock<'a> {
-    symbol: &'a str,
-}
-
-impl<'a> Stock<'a> {
-    /// Creates a new Stock instance for a specific stock symbol.
+impl Etf {
+    /// Lists all available ETFs.
+    /// 
+    /// ## Returns
     ///
-    /// ## Arguments
-    ///
-    /// * `symbol` - The stock symbol to get data for
-    pub fn new(symbol: &'a str) -> Self {
-        Self { symbol }
-    }
-
+    /// A Result containing either the JSON response or an error.
     pub async fn list() -> Result<Value, reqwest::Error> {
-        make_request("stock/list", HashMap::new()).await
-    }
-    /// Gets company profile information.
-    ///
-    /// ## Returns
-    ///
-    /// A Result containing either the JSON response or an error.
-    pub async fn profile(&self) -> Result<Value, reqwest::Error> {
-        make_request(
-            "company/profile",
-            generate_json(Value::String(self.symbol.to_string()), None)
-        ).await
+        make_request("symbol/available-etfs", HashMap::new()).await
     }
 
-    /// Gets current stock quote.
-    ///
-    /// ## Returns
-    ///
-    /// A Result containing either the JSON response or an error.
-    pub async fn quote(&self) -> Result<Value, reqwest::Error> {
-        make_request(
-            "quote",
-            generate_json(Value::String(self.symbol.to_string()), None)
-        ).await
-    }
-
-    /// Gets financial statements and metrics.
-    ///
-    /// ## Returns
-    ///
-    /// A Financials instance for accessing financial data.
-    pub fn financial(&self) -> Financial {
-        Financial::new(self.symbol)
-    }
-
-    /// Gets company rating information.
-    ///
-    /// ## Returns
-    ///
-    /// A Result containing either the JSON response or an error.
-    pub async fn rating(&self) -> Result<Value, reqwest::Error> {
-        make_request(
-            "company/rating",
-            generate_json(Value::String(self.symbol.to_string()), None)
-        ).await
-    }
-
-    /// Gets real-time stock price.
-    ///
-    /// ## Returns
-    ///
-    /// A Result containing either the JSON response or an error.
-    pub async fn current_price(&self) -> Result<Value, reqwest::Error> {
-        make_request(
-            "stock/real-time-price",
-            generate_json(Value::String(self.symbol.to_string()), None)
-        ).await
-    }
-
-    /// Gets historical price data.
+    /// Gets quotes for either a specific ETF or all ETFs.
     ///
     /// ## Arguments
     ///
+    /// * `symbol` - Optional ETF symbol to get quote for. If None, returns quotes for all ETFs.
+    ///
+    /// ## Returns
+    ///
+    /// A Result containing either the JSON response or an error.
+    pub async fn quote(symbol: Option<&str>) -> Result<Value, reqwest::Error> {
+        match symbol {
+            Some(s) => make_request("quote", generate_json(Value::String(s.to_string()), None)).await,
+            None => make_request("quotes/etf", HashMap::new()).await,
+        }
+    }
+
+    /// Gets historical price data for an ETF.
+    ///
+    /// ## Arguments
+    ///
+    /// * `symbol` - ETF symbol to get history for
     /// * `start_date` - Optional start date
     /// * `end_date` - Optional end date
     /// * `data_type` - Optional data type
@@ -96,7 +49,7 @@ impl<'a> Stock<'a> {
     ///
     /// A Result containing either the JSON response or an error.
     pub async fn history(
-        &self,
+        symbol: &str,
         start_date: Option<&str>,
         end_date: Option<&str>,
         data_type: Option<&str>,
@@ -110,15 +63,16 @@ impl<'a> Stock<'a> {
         });
 
         make_request(
-            "historical-price-full",
-            generate_json(Value::String(self.symbol.to_string()), Some(query_params))
+            "historical-price-full/etf",
+            generate_json(Value::String(symbol.to_string()), Some(query_params))
         ).await
     }
 
-    /// Gets dividend history.
+    /// Gets dividend history for an ETF.
     ///
     /// ## Arguments
     ///
+    /// * `symbol` - ETF symbol to get dividend history for
     /// * `start_date` - Optional start date
     /// * `end_date` - Optional end date
     /// * `data_type` - Optional data type
@@ -128,7 +82,7 @@ impl<'a> Stock<'a> {
     ///
     /// A Result containing either the JSON response or an error.
     pub async fn dividend_history(
-        &self,
+        symbol: &str,
         start_date: Option<&str>,
         end_date: Option<&str>,
         data_type: Option<&str>,
@@ -143,14 +97,15 @@ impl<'a> Stock<'a> {
 
         make_request(
             "historical-price-full/stock_dividend",
-            generate_json(Value::String(self.symbol.to_string()), Some(query_params))
+            generate_json(Value::String(symbol.to_string()), Some(query_params))
         ).await
     }
 
-    /// Gets stock split history.
+    /// Gets split history for an ETF.
     ///
     /// ## Arguments
     ///
+    /// * `symbol` - ETF symbol to get split history for
     /// * `start_date` - Optional start date
     /// * `end_date` - Optional end date
     /// * `data_type` - Optional data type
@@ -160,7 +115,7 @@ impl<'a> Stock<'a> {
     ///
     /// A Result containing either the JSON response or an error.
     pub async fn split_history(
-        &self,
+        symbol: &str,
         start_date: Option<&str>,
         end_date: Option<&str>,
         data_type: Option<&str>,
@@ -175,27 +130,22 @@ impl<'a> Stock<'a> {
 
         make_request(
             "historical-price-full/stock_split",
-            generate_json(Value::String(self.symbol.to_string()), Some(query_params))
+            generate_json(Value::String(symbol.to_string()), Some(query_params))
         ).await
     }
 }
 
 
 pub async fn example() -> Result<(), reqwest::Error> {
-    let aapl = Stock::new("AAPL");
+    // List all ETFs
+    let etfs = Etf::list().await?;
     
-    // Get company profile
-    let profile = aapl.profile().await?;
-    
-    // Get current quote
-    let quote = aapl.quote().await?;
-    
-    // Get financial data
-    let financials = aapl.financial();
-    let income = financials.income(None).await?;
+    // Get quote for a specific ETF
+    let spy_quote = Etf::quote(Some("SPY")).await?;
     
     // Get historical data
-    let history = aapl.history(
+    let history = Etf::history(
+        "SPY",
         Some("2023-01-01"),
         Some("2023-12-31"),
         None,

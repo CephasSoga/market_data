@@ -2,8 +2,7 @@
 #![allow(warnings)]
 #![allow(unused_variables)]
 
-
-use crate::request::{generate_json, make_request};
+use crate::api_calls::request::{make_request, generate_json};
 use serde_json::Value;
 use std::collections::HashMap;
 
