@@ -14,6 +14,52 @@ use crate::config::Config;
 use thiserror::Error;
 use std::io::{Error, ErrorKind};
 use std::collections::HashSet;
+use std::fmt::{self, Display};
+
+
+#[derive(Debug)]
+pub enum ErrorStatus {
+    ConsumptionFailed(i16)
+}
+impl Display for ErrorStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ErrorStatus::ConsumptionFailed(code) => {
+                write!(f, "{}", code)
+            }
+        }
+    }
+}
+
+#[derive(Error, Debug)]
+pub struct  StockError {
+    wrapped: WebSocketError,
+    status: ErrorStatus,
+}
+impl Display for StockError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "StockError(status: {}, wrapped: {})",
+            self.status, self.wrapped
+        )
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct StockUpdate {
+    pub s: String,  // Ticker symbol
+    pub t: u64,     // Timestamp
+    pub r#type: String, // Type
+    pub ap: Option<f64>, // Ask price
+    pub r#as: Option<u64>, // Ask size
+    pub bp: Option<f64>, // Bid price
+    pub bs: Option<u64>, // Bid size
+    pub lp: Option<f64>, // Last price
+    pub ls: Option<u64>, // Last size
+}
+
+// ... (Rest of the code for Update, BatchState, GenericHandler, WebSocketHandler, and WebSocketError) ...
 
 pub struct StockSocket {
     config: Arc<Config>,
@@ -31,50 +77,15 @@ impl StockSocket {
             tickers: Vec::new(), 
         }
     }
-    async fn change_tickers(&mut self, new_tickers: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
-        self.tickers = new_tickers;
-        Ok(())
-    }
 
-    async fn consum_stream(&mut self, auto_shutdown: bool) -> Result<(), WebSocketError> {
+    async fn consum_stream(&mut self, auto_shutdown: bool) -> Result<(), StockError> {
         let config = Arc::clone(&self.config);
         let ws = &config.websocket.stock_ws;
         let fwd_ws = Some(config.websocket.fwd_stock_ws.clone());
 
-        self.consume(ws, self.tickers.clone(), auto_shutdown, fwd_ws).await
-    }
-}
+        let tickers = self.tickers.clone();
 
-impl WebSocketHandler for StockSocket {
-    async fn new(config: Config) -> Self {
-        Self::new(config).await
-    }
-
-    async fn close(&mut self, reason: Option<String>) -> Result<(), WebSocketError> {
-        self.handler.close(reason).await
-    }
-
-    async fn login(&mut self) -> Result<(), WebSocketError> {
-        todo!()
-    }
-
-    async fn subscribe(&mut self, tickers: &Vec<String>) -> Result<(),WebSocketError> {
-        todo!()
-    }
-
-    async fn connect_forward_ws(&mut self, url: &str) -> Result<(), WebSocketError> {
-        self.handler.connect_forward_ws(url).await
-    }
-
-    async fn reconnect_forward_ws(&mut self, url: &str) -> Result<(), WebSocketError> {
-        self.handler.reconnect_forward_ws(url).await
-    }
-
-    async fn stream(&mut self, ws: &String, tickers: &Vec<String>, shutdown_rx: watch::Receiver<bool>) -> Result<(), WebSocketError> {
-        self.handler.stream(ws, tickers, shutdown_rx).await
-    }
-
-    async fn consume(&mut self, ws: &String, tickers: Vec<String>, auto_shutdown: bool, forward_url: Option<String>) -> Result<(), WebSocketError> {
-        self.handler.consume(ws, tickers, auto_shutdown, forward_url).await
+        self.handler.consume(ws, tickers, auto_shutdown, fwd_ws).await
+            .map_err(|err| {StockError {wrapped: err, status: ErrorStatus::ConsumptionFailed(0)}})
     }
 }
