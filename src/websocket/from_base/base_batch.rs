@@ -1,21 +1,24 @@
 use tokio::net::TcpStream;
-use tokio_tungstenite::{connect_async, tungstenite::protocol::Message, WebSocketStream};
-use tokio_tungstenite::MaybeTlsStream;
-use tokio_tungstenite::tungstenite::protocol::{CloseFrame, frame::coding::CloseCode};
+use async_tungstenite::tokio::{TokioAdapter, connect_async};
+use async_tungstenite::{tungstenite::protocol::Message, WebSocketStream};
+use async_tungstenite::tungstenite::protocol::{CloseFrame, frame::coding::CloseCode};
+use async_tungstenite::stream::Stream;
 use tokio::{sync::mpsc, sync::watch, sync::Mutex, time};
 use futures_util::{SinkExt, StreamExt};
+use futures_util::stream::{SplitStream, SplitSink};
 use serde::{Serialize, Deserialize};
+use std::ops::Deref;
 use std::sync::Arc;
 use tracing::{info, error};
-use futures::stream::{SplitSink, SplitStream};
 use crate::config::Config;
 use thiserror::Error;
 use std::io::{Error, ErrorKind};
+use tokio_native_tls::TlsStream;
 
 #[derive(Error, Debug)]
 pub enum WebSocketError {
     #[error("Failed to connect to WebSocket: {0}")]
-    ConnectError(#[source] tokio_tungstenite::tungstenite::Error),
+    ConnectError(#[source] async_tungstenite::tungstenite::Error),
 
     #[error("Failed to send WebSocket message: {0}")]
     SendError(#[source] tokio::io::Error),
@@ -89,14 +92,21 @@ pub enum Update {
 // SharedState for Batch Processing
 type SharedState = Arc<Mutex<BatchState>>;
 
+// reader and writer types
+type WebSocketStreamType = WebSocketStream<Stream<TokioAdapter<TcpStream>, TokioAdapter<TlsStream<TcpStream>>>>; 
+type WebSocketWriter = SplitSink<WebSocketStreamType, Message>; 
+type WebSocketReader = SplitStream<WebSocketStreamType>;
+
+
 struct BatchState {
     pub buffer: Vec<Update>,
-    pub forward_write: Option<Arc<Mutex<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>>,
+    pub forward_write: Option<Arc<Mutex<WebSocketWriter>>>,
     pub buffer_size: usize,
 }
 
 impl BatchState {
     async fn handle_update(&mut self, update: Update) -> Result<(), WebSocketError> {
+        println!("Received: {:?}", update);
         if let Some(ref forward_write) = self.forward_write {
             let message = serde_json::to_string(&update)
                 .map_err(|err| WebSocketError::SerializationError(err))?; 
@@ -139,12 +149,12 @@ pub trait WebSocketHandler {
     async fn consume(&mut self, ws: &String, tickers: Vec<String>, auto_shutdown: bool, forward_url: Option<String>) -> Result<(), WebSocketError>;
 }
 
-
+#[derive(Debug)]
 pub struct GenericHandler {
     pub config: Arc<Config>,
-    pub write: Option<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>,
-    pub read: Option<SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>>,
-    pub forward_write: Option<Arc<Mutex<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>>
+    pub write: Option<WebSocketWriter>,
+    pub read: Option<WebSocketReader>,
+    pub forward_write: Option<Arc<Mutex<WebSocketWriter>>>
 
 }
 impl WebSocketHandler for GenericHandler {
@@ -158,6 +168,7 @@ impl WebSocketHandler for GenericHandler {
     }
 
     async fn connect_forward_ws(&mut self, url: &str) -> Result<(), WebSocketError> {
+        println!("Connecting foward socket...");
         let (ws_stream, _) = connect_async(url).await
             .map_err(|err| WebSocketError::ConnectError(err))?;
 
@@ -182,6 +193,7 @@ impl WebSocketHandler for GenericHandler {
 
     /// Close the WebSocket connection
     async fn close(&mut self, reason: Option<String>) -> Result<(), WebSocketError> {
+        println!("Closing...");
         let reason = reason.unwrap_or_else(|| "No specific reason provided".to_string());
 
         let close_frame = CloseFrame {
@@ -232,11 +244,21 @@ impl WebSocketHandler for GenericHandler {
         tickers: &Vec<String>,
         shutdown_rx: watch::Receiver<bool>,
     ) -> Result<(), WebSocketError> {
+        println!("Streaming...");
+        println!("Async connecting...");
         let (ws_stream, _) = connect_async(ws).await
             .map_err(|err| WebSocketError::ConnectError(err))?;
+        println!("Spliting...");
         let (write, mut read) = ws_stream.split();
     
+        println!("Extracting <WriteHalf>...");
         self.write = Some(write);
+
+        //Login end subscribe to tickers
+        println!("Loging in...");
+        self.login().await;
+        println!("Subscribing...");
+        self.subscribe(tickers).await;
     
         let shared_state = Arc::new(Mutex::new(BatchState {
             buffer: Vec::new(),
@@ -251,6 +273,7 @@ impl WebSocketHandler for GenericHandler {
         let mut shutdown_rx_clone = shutdown_rx.clone();
     
         // Spawn batch processing task
+        println!("Spawning tasks...");
         tokio::spawn(async move {
             let mut interval = time::interval(time::Duration::from_millis(interval_ms));
             loop {
@@ -275,24 +298,29 @@ impl WebSocketHandler for GenericHandler {
                 }
             }
         });
-    
-        //Login end subscribe to tickers
-        self.login().await;
-        self.subscribe(tickers).await;
         
         // Read WebSocket messages
+        println!("Reading messages...");
         while !*shutdown_rx.borrow() {
             if let Some(message) = read.next().await {
                 match message {
                     Ok(Message::Text(text)) => {
-                        serde_json::from_str::<Update>(&text)
+                        println!("{}", text);
+                        // Deserialize the text message into an Update object
+                        let update = serde_json::from_str::<Update>(&text)
                             .map_err(|err| WebSocketError::DeserializationError(err))?;
+                        // Send the Update object to the channel 
+                        tx.send(update).await.map_err(|err| WebSocketError::ChannelSendError(err))?;
                     }
                     Ok(Message::Binary(bin)) => {
-                        serde_json::from_slice::<Update>(&bin)
+                        println!("{:?}", bin);
+                        // Deserialize the text message into an Update object
+                        let update = serde_json::from_slice::<Update>(&bin)
                             .map_err(|err| WebSocketError::DeserializationError(err))?;
+                        // Send the Update object to the channel 
+                        tx.send(update).await.map_err(|err| WebSocketError::ChannelSendError(err))?;
                     }
-                    _ => (),
+                    _ => println!("No message received!"),
                 }
             }
         }
@@ -304,9 +332,9 @@ impl WebSocketHandler for GenericHandler {
     
 
     async fn consume(&mut self, ws: &String, tickers: Vec<String>, auto_shutdown: bool, forward_url: Option<String>) -> Result<(), WebSocketError> {
-
+        println!("Consuming...");
         if let Some(url) = forward_url {
-            self.connect_forward_ws(&url).await?;
+            self.connect_forward_ws(&url).await.map_err(|err| eprintln!("Foward Ws is not listening!"));
         }
     
         let (shutdown_tx, mut shutdown_rx) = watch::channel(false);

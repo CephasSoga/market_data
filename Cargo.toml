@@ -11,9 +11,13 @@ tokio = {version = "1.30.0", features = ["full"]}            # Asynchronous runt
 dotenv = "0.15.0"                                            # Loads env vars from .env
 config = "0.13"                                              # To parse configuration .toml files
 clap = { version = "4.3", features = ["derive"] }            # Cmd args parser
-tokio-tungstenite = "0.17"                                   # Websocket handler
+tokio-tungstenite = "0.26.1"                                   # Websocket handler
 futures = "0.3"
 futures-util = "0.3.31"
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
 thiserror = "2.0.8"
+async-tungstenite = { version = "0.28.2", features = ["tokio-runtime", "tokio-native-tls"] }
+time = "0.3"
+tokio-native-tls = "0.3"
+rustls = "0.20"

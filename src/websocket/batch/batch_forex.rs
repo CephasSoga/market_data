@@ -1,6 +1,9 @@
 use tokio::net::TcpStream;
-use tokio_tungstenite::{connect_async, tungstenite::protocol::Message, WebSocketStream};
-use tokio_tungstenite::tungstenite::protocol::{CloseFrame, frame::coding::CloseCode};
+use async_tungstenite::tokio::{TokioAdapter, connect_async};
+use async_tungstenite::{tungstenite::protocol::Message, WebSocketStream};
+use async_tungstenite::tungstenite::protocol::{CloseFrame, frame::coding::CloseCode};
+use async_tungstenite::stream::Stream;
+use tokio_native_tls::TlsStream;
 use tokio::{sync::mpsc, sync::watch, time};
 use futures_util::{SinkExt, StreamExt};
 use serde::{Serialize, Deserialize};
@@ -22,11 +25,16 @@ struct ForexUpdate {
     bs: u64         // Bid size
 }
 
+// reader and writer types
+type WebSocketStreamType = WebSocketStream<Stream<TokioAdapter<TcpStream>, TokioAdapter<TlsStream<TcpStream>>>>; 
+type WebSocketWriter = SplitSink<WebSocketStreamType, Message>; 
+type WebSocketReader = SplitStream<WebSocketStreamType>;
+
 
 struct ForexSocket {
     config: Arc<Config>,
-    write: Option<SplitSink<WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>, Message>>,
-    read: Option<SplitStream<WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>>>,
+    write: Option<WebSocketWriter>,
+    read: Option<WebSocketReader>,
 }
 impl ForexSocket {
 

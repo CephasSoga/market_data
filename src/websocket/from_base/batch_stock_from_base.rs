@@ -63,12 +63,12 @@ pub struct StockUpdate {
 
 pub struct StockSocket {
     config: Arc<Config>,
-    handler: GenericHandler,
-    tickers: Vec<String>, 
+    pub handler: GenericHandler,
+    pub tickers: Vec<String>, 
 }
 
 impl StockSocket {
-    async fn new(config: Config) -> Self {
+    pub async fn new(config: Config) -> Self {
         let handler = GenericHandler::new(config.clone()).await;
         let config = Arc::new(config);
         Self {
@@ -77,8 +77,18 @@ impl StockSocket {
             tickers: Vec::new(), 
         }
     }
+    /// Adds a ticker to the `tickers` field only if it is not already present.
+    fn update_tickers(&mut self, tickers: Vec<&str>) {
+        // Check if the ticker is not already in the list
+        for ticker in tickers {
+            if !self.tickers.contains(&ticker.to_string()) {
+                self.tickers.push(ticker.to_string());
+            }
+        }
+    }
 
-    async fn consum_stream(&mut self, auto_shutdown: bool) -> Result<(), StockError> {
+    pub async fn consum_stream(&mut self, auto_shutdown: bool) -> Result<(), StockError> {
+        println!("Running...");
         let config = Arc::clone(&self.config);
         let ws = &config.websocket.stock_ws;
         let fwd_ws = Some(config.websocket.fwd_stock_ws.clone());
@@ -88,4 +98,11 @@ impl StockSocket {
         self.handler.consume(ws, tickers, auto_shutdown, fwd_ws).await
             .map_err(|err| {StockError {wrapped: err, status: ErrorStatus::ConsumptionFailed(0)}})
     }
+}
+
+pub async fn example() {
+    let config = Config::new().unwrap();
+    let mut stockWs = StockSocket::new(config).await;
+    stockWs.update_tickers(vec!["AAPL"]);
+    stockWs.consum_stream(false).await.expect("Failed to run.");
 }

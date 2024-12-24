@@ -2,13 +2,13 @@
 msg = "Successfully loaded configurations."
 
 [api]
-token = ""
+token = "GRS0D5vK0ymAcBFsKt2KVwLoKott970G"
 
-[websoket]
+[websocket]
 stock_ws = "wss://websockets.financialmodelingprep.com"
 crypto_ws = "wss://crypto.financialmodelingprep.com"
 forex_ws = "wss://forex.financialmodelingprep.com"
-fwd_stock_ws = "ws//198.255.01.10"
+fwd_stock_ws = "ws://127.0.0.1:8080"
 fwd_forex_ws = ""
 fwd_crypto_ws = ""
 channel_bound = 100

@@ -5,6 +5,7 @@ pub  mod auth;
 pub mod api_calls;
 
 
-fn main() {
-    unimplemented!()
+#[tokio::main]
+async fn main() {
+    websocket::from_base::batch_stock_from_base::example().await;
 }

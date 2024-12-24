@@ -1,5 +1,9 @@
 use tokio::net::TcpStream;
-use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
+use async_tungstenite::tokio::{TokioAdapter, connect_async};
+use async_tungstenite::{tungstenite::protocol::Message, WebSocketStream};
+use async_tungstenite::tungstenite::protocol::{CloseFrame, frame::coding::CloseCode};
+use async_tungstenite::stream::Stream;
+use tokio_native_tls::TlsStream;
 use tokio::sync::mpsc;
 use futures_util::{SinkExt, StreamExt};
 use serde::{Serialize, Deserialize};
