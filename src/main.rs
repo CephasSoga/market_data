@@ -4,9 +4,22 @@ pub mod config;
 pub  mod auth;
 pub mod logging;
 pub mod options;
+pub mod request_parser;
 
+use std::sync::Arc;
+
+use websocket::proxy_ws::WsHandler;
+
+use crate::config::Config;
+use crate::websocket::proxy_ws::WebSocketProxyServer;
 
 #[tokio::main]
 async fn main() {
-    websocket::from_base::batch_stock_from_base::example().await;
+    let config = Config::new().unwrap();
+    let mut ws = WebSocketProxyServer::new(
+        Arc::new(config),
+        "0.0.0.0:8080"
+    );
+
+    ws.run().await
 }

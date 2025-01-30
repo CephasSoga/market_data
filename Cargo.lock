@@ -891,6 +891,7 @@ dependencies = [
  "dotenv",
  "futures",
  "futures-util",
+ "native-tls",
  "reqwest",
  "rustls",
  "serde",
@@ -902,6 +903,7 @@ dependencies = [
  "tokio-tungstenite",
  "tracing",
  "tracing-subscriber",
+ "tungstenite 0.26.1",
 ]
 
 [[package]]
@@ -1743,6 +1745,7 @@ dependencies = [
  "futures-util",
  "log",
  "tokio",
+ "tokio-native-tls",
  "tungstenite 0.26.1",
 ]
 
