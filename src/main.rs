@@ -8,10 +8,10 @@ pub mod request_parser;
 
 use std::sync::Arc;
 
-use websocket::proxy_ws::WsHandler;
+use websocket::WsHandler;
 
 use crate::config::Config;
-use crate::websocket::proxy_ws::WebSocketProxyServer;
+use crate::websocket::WebSocketProxyServer;
 
 #[tokio::main]
 async fn main() {
@@ -21,5 +21,5 @@ async fn main() {
         "0.0.0.0:8080"
     );
 
-    ws.run().await
+    ws.run().await.expect("Failed to run Ws.")
 }
